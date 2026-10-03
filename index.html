@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serverless Real-Time System Metrics Analytics Dashboard</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0b0f17',
+                        cardBg: '#131b2e',
+                        cardBorder: '#1e293b',
+                        accentBlue: '#3b82f6',
+                        accentCyan: '#06b6d4',
+                        accentPurple: '#8b5cf6',
+                        accentEmerald: '#10b981',
+                        accentRose: '#f43f5e',
+                        accentAmber: '#f59e0b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background-color: #0b0f17;
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f17;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+
+        /* Pulsing & Glow Effects */
+        .glow-blue {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.25);
+        }
+        .glow-emerald {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+        }
+        .glow-rose {
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+        }
+
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .animate-pulse-fast {
+            animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* Canvas Chart Responsive Fix */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 200px;
+        }
+
+        /* Terminal Style */
+        .terminal-text {
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-darkBg text-slate-100 antialiased">
+
+    <!-- Navigation / Top Header Bar -->
+    <header class="border-b border-cardBorder bg-cardBg/80 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-6 py-3 transition-all duration-200">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-gradient-to-tr from-accentBlue to-accentCyan rounded-xl text-white shadow-lg shadow-blue-500/20">
+                    <i class="fa-solid fa-server text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-lg tracking-tight text-white">Serverless Pulse Analytics</h1>
+                        <span class="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-fast"></span>
+                            Live Streaming
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">Real-Time Observability & Telemetry Engine</p>
+                </div>
+            </div>
+
+            <!-- Provider & Controls Header Tools -->
+            <div class="flex flex-wrap items-center gap-3">
+                
+                <!-- Cloud Provider Switcher -->
+                <div class="flex items-center bg-slate-900/80 p-1 rounded-lg border border-cardBorder text-xs">
+                    <button onclick="setProvider('aws')" id="btn-aws" class="px-2.5 py-1 rounded-md font-medium transition-all bg-accentBlue text-white shadow">
+                        <i class="fa-brands fa-aws mr-1"></i> AWS
+                    </button>
+                    <button onclick="setProvider('gcp')" id="btn-gcp" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all">
+                        <i class="fa-brands fa-google mr-1"></i> GCP
+                    </button>
+                    <button onclick="setProvider('azure')" id="btn-azure" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all">
+                        <i class="fa-brands fa-microsoft mr-1"></i> Azure
+                    </button>
+                </div>
+
+                <!-- Region Selector -->
+                <select id="region-select" onchange="updateRegion()" class="bg-slate-900 border border-cardBorder text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accentBlue">
+                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                </select>
+
+                <!-- Architecture Modal Button -->
+                <button onclick="toggleModal('architecture-modal')" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-accentCyan"></i>
+                    <span>Architecture View</span>
+                </button>
+
+                <!-- Pause / Stream Toggle -->
+                <button id="pause-btn" onclick="togglePauseStream()" class="px-3 py-1.5 text-xs font-medium bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-all flex items-center gap-2">
+                    <i id="pause-icon" class="fa-solid fa-pause"></i>
+                    <span id="pause-text">Pause Stream</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <main class="max-w-7xl mx-auto w-full px-4 lg:px-6 py-6 flex-1 space-y-6">
+
+        <!-- KPI Analytics Overview Bar -->
+        <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            
+            <!-- Invocations -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
+                <div class="flex items-center justify-between text-slate-400 text-xs">
+                    <span>Invocations / sec</span>
+                    <i class="fa-solid fa-bolt text-accentAmber"></i>
+                </div>
+                <div class="mt-2">
+                    <div id="kpi-invocations" class="text-2xl font-bold tracking-tight text-white">1,420</div>
+                    <div class="text-[11px] text-emerald-400 flex items-center gap-1 mt-1">
+                        <i class="fa-solid fa-arrow-trend-up"></i>
+                        <span>+12.4% vs last min</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Average Execution Latency -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
+                <div class="flex items-center justify-between text-slate-400 text-xs">
+                    <span>p95 Latency</span>
+                    <i class="fa-solid fa-clock-rotate-left text-accentBlue"></i>
+                </div>
+                <div class="mt-2">
+                    <div id="kpi-latency" class="text-2xl font-bold tracking-tight text-white">42 ms</div>
+                    <div id="kpi-latency-status" class="text-[11px] text-emerald-400 flex items-center gap-1 mt-1">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>Optimal</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Rate -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
+                <div class="flex items-center justify-between text-slate-400 text-xs">
+                    <span>Error Rate</span>
+                    <i class="fa-solid fa-triangle-exclamation text-accentRose"></i>
+                </div>
+                <div class="mt-2">
+                    <div id="kpi-errors" class="text-2xl font-bold tracking-tight text-emerald-400">0.02%</div>
+                    <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
+                        <span>Threshold: &lt;1.0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Workers / Pods -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
+                <div class="flex items-center justify-between text-slate-400 text-xs">
+                    <span>Active Instances</span>
+                    <i class="fa-solid fa-cubes text-accentPurple"></i>
+                </div>
+                <div class="mt-2">
+                    <div id="kpi-instances" class="text-2xl font-bold tracking-tight text-white">48</div>
+                    <div class="text-[11px] text-purple-400 flex items-center gap-1 mt-1">
+                        <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                        <span>Auto-scaled</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cold Starts Count -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
+                <div class="flex items-center justify-between text-slate-400 text-xs">
+                    <span>Cold Starts / min</span>
+                    <i class="fa-solid fa-snowflake text-accentCyan"></i>
+                </div>
+                <div class="mt-2">
+                    <div id="kpi-coldstarts" class="text-2xl font-bold tracking-tight text-white">3</div>
+                    <div class="text-[11px] text-cyan-400 flex items-center gap-1 mt-1">
+                        <span>Avg impact: +210ms</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estimated Monthly Cost -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all">
+                <div class="flex items-center justify-between text-slate-400 text-xs">
+                    <span>Est. Run Cost/Mo</span>
+                    <i class="fa-solid fa-coins text-emerald-400"></i>
+                </div>
+                <div class="mt-2">
+                    <div id="kpi-cost" class="text-2xl font-bold tracking-tight text-white">$14.82</div>
+                    <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
+                        <span>Based on active compute</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Telemetry Control Toolbar -->
+        <section class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Sampling Rate & Controls -->
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="sample-rate" class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-sliders text-accentBlue"></i> Sampling Interval:
+                    </label>
+                    <select id="sample-rate" onchange="changeSamplingRate()" class="bg-slate-900 border border-cardBorder text-xs text-white rounded-md px-2.5 py-1 focus:outline-none focus:border-accentBlue">
+                        <option value="200">200ms (High Frequency)</option>
+                        <option value="500" selected>500ms (Realtime standard)</option>
+                        <option value="1000">1,000ms (1 sec)</option>
+                        <option value="3000">3,000ms (3 sec)</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <label for="time-range" class="text-xs font-semibold text-slate-300">Time Window:</label>
+                    <select id="time-range" onchange="changeTimeWindow()" class="bg-slate-900 border border-cardBorder text-xs text-white rounded-md px-2.5 py-1 focus:outline-none">
+                        <option value="30">Last 30 Seconds</option>
+                        <option value="60" selected>Last 1 Minute</option>
+                        <option value="300">Last 5 Minutes</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Trigger Buttons -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="triggerTrafficSurge()" class="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-blue-600/20 active:scale-95">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Simulate Load Spike</span>
+                </button>
+
+                <button onclick="triggerColdStart()" class="px-3 py-1.5 text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-cyan-600/20 active:scale-95">
+                    <i class="fa-solid fa-snowflake"></i>
+                    <span>Trigger Cold Start</span>
+                </button>
+
+                <button onclick="injectErrorSpike()" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-rose-600/20 active:scale-95">
+                    <i class="fa-solid fa-bug"></i>
+                    <span>Inject Errors</span>
+                </button>
+
+                <button onclick="resetMetrics()" class="px-2.5 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all border border-slate-700" title="Reset All Telemetry">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- Real-Time Metrics Analytics Visualizations Grid -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Chart 1: Latency & Execution Speed -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col h-80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-gauge-high text-accentBlue"></i>
+                        <h3 class="font-semibold text-sm text-slate-200">API Gateway & Function Latency (p50 / p95 / p99)</h3>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">Unit: Milliseconds (ms)</span>
+                </div>
+                <div class="flex-1 w-full relative">
+                    <canvas id="chart-latency"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: CPU & Memory Utilization -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col h-80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-accentPurple"></i>
+                        <h3 class="font-semibold text-sm text-slate-200">Serverless Cluster CPU & Memory Allocation</h3>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">Unit: Percentage (%)</span>
+                </div>
+                <div class="flex-1 w-full relative">
+                    <canvas id="chart-cpu-memory"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Network Throughput & Disk I/O -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col h-80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-network-wired text-accentEmerald"></i>
+                        <h3 class="font-semibold text-sm text-slate-200">Network Throughput (Inbound / Outbound)</h3>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">Unit: Megabytes/s (MB/s)</span>
+                </div>
+                <div class="flex-1 w-full relative">
+                    <canvas id="chart-network"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 4: Invocations, Errors & Cold Starts -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col h-80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-accentAmber"></i>
+                        <h3 class="font-semibold text-sm text-slate-200">Function Invocations, Errors & Cold Starts</h3>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">Count / interval</span>
+                </div>
+                <div class="flex-1 w-full relative">
+                    <canvas id="chart-invocations"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Serverless Function Health & Instance Grid -->
+        <section class="bg-cardBg border border-cardBorder rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-bold text-base text-slate-100 flex items-center gap-2">
+                        <i class="fa-solid fa-server text-accentCyan"></i>
+                        Microservice / Serverless Function Fleet Health
+                    </h2>
+                    <p class="text-xs text-slate-400">Live monitoring of active lambda endpoints and execution clusters</p>
+                </div>
+
+                <!-- Filters -->
+                <div class="flex flex-wrap items-center gap-3 text-xs">
+                    <div class="flex items-center bg-slate-900 border border-cardBorder rounded-lg p-1">
+                        <button onclick="filterFunctions('all')" id="filter-fn-all" class="px-2.5 py-1 rounded-md bg-slate-800 text-white font-medium">All</button>
+                        <button onclick="filterFunctions('healthy')" id="filter-fn-healthy" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white">Healthy</button>
+                        <button onclick="filterFunctions('cold')" id="filter-fn-cold" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white">Cold Start</button>
+                        <button onclick="filterFunctions('degraded')" id="filter-fn-degraded" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white">Degraded</button>
+                    </div>
+
+                    <input type="text" id="function-search" onkeyup="searchFunctions()" placeholder="Search functions..." class="bg-slate-900 border border-cardBorder text-xs text-white rounded-lg px-3 py-1.5 focus:outline-none focus:border-accentBlue">
+                </div>
+            </div>
+
+            <!-- Grid Container -->
+            <div id="function-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                <!-- Dynamically populated via JS -->
+            </div>
+        </section>
+
+        <!-- Event Log Console & Diagnostics Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Real-Time WebSocket Event Log Terminal (2 Cols) -->
+            <div class="lg:col-span-2 bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col h-[420px]">
+                <div class="flex items-center justify-between border-b border-cardBorder pb-3 mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-emerald-400"></i>
+                        <h3 class="font-semibold text-sm text-slate-200">Live Streaming Telemetry Log Console</h3>
+                    </div>
+
+                    <div class="flex items-center gap-2 text-xs">
+                        <!-- Log Filter Select -->
+                        <select id="log-filter" onchange="filterLogs()" class="bg-slate-900 border border-cardBorder text-xs text-slate-300 rounded-md px-2 py-1 focus:outline-none">
+                            <option value="ALL">All Levels</option>
+                            <option value="INFO">INFO Only</option>
+                            <option value="WARN">WARN Only</option>
+                            <option value="ERROR">ERROR Only</option>
+                        </select>
+
+                        <button onclick="clearLogConsole()" class="px-2 py-1 text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 rounded border border-cardBorder">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Log Output Window -->
+                <div id="log-console" class="flex-1 bg-slate-950 rounded-lg p-3 overflow-y-auto terminal-text text-xs space-y-1.5 border border-slate-900 select-text">
+                    <!-- Logs stream here dynamically -->
+                </div>
+            </div>
+
+            <!-- Diagnostics, Alert Rules & Report Exporter (1 Col) -->
+            <div class="bg-cardBg border border-cardBorder rounded-xl p-4 flex flex-col justify-between space-y-4">
+                <div>
+                    <h3 class="font-semibold text-sm text-slate-200 flex items-center gap-2 border-b border-cardBorder pb-3 mb-3">
+                        <i class="fa-solid fa-shield-halved text-accentAmber"></i>
+                        Alert Rules & Diagnostics
+                    </h3>
+
+                    <!-- Configurable Alert Thresholds -->
+                    <div class="space-y-3 text-xs">
+                        <div class="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-cardBorder">
+                            <div>
+                                <div class="font-medium text-slate-200">Max CPU Limit Threshold</div>
+                                <div class="text-[11px] text-slate-400">Trigger alert if CPU &gt; 85%</div>
+                            </div>
+                            <input type="checkbox" id="rule-cpu" checked class="w-4 h-4 rounded text-accentBlue focus:ring-0 bg-slate-800 border-slate-700">
+                        </div>
+
+                        <div class="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-cardBorder">
+                            <div>
+                                <div class="font-medium text-slate-200">p99 Latency Anomaly Alert</div>
+                                <div class="text-[11px] text-slate-400">Trigger alert if Latency &gt; 350ms</div>
+                            </div>
+                            <input type="checkbox" id="rule-latency" checked class="w-4 h-4 rounded text-accentBlue focus:ring-0 bg-slate-800 border-slate-700">
+                        </div>
+
+                        <div class="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-cardBorder">
+                            <div>
+                                <div class="font-medium text-slate-200">Error Spike Threshold</div>
+                                <div class="text-[11px] text-slate-400">Alert if error rate &gt; 2.5%</div>
+                            </div>
+                            <input type="checkbox" id="rule-error" checked class="w-4 h-4 rounded text-accentBlue focus:ring-0 bg-slate-800 border-slate-700">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Data & Summary Generator -->
+                <div class="space-y-2 pt-2 border-t border-cardBorder">
+                    <button onclick="generateDiagnosticSummary()" class="w-full py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>Generate System Audit Report</span>
+                    </button>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="exportMetrics('json')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 transition-all flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-file-code text-accentCyan"></i> Export JSON
+                        </button>
+                        <button onclick="exportMetrics('csv')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700 transition-all flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-file-csv text-accentEmerald"></i> Export CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer Section -->
+    <footer class="border-t border-cardBorder bg-cardBg/50 py-4 px-6 mt-6">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-cloud text-accentBlue"></i>
+                <span>Serverless Real-Time System Metrics Analytics Engine</span>
+            </div>
+            <div>Simulated Cloud Infrastructure - AWS / GCP / Azure Ready</div>
+        </div>
+    </footer>
+
+    <!-- MODAL: Architecture Overview Flowchart -->
+    <div id="architecture-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-2xl max-w-4xl w-full p-6 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            
+            <div class="flex items-center justify-between border-b border-cardBorder pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-cyan-500/10 text-accentCyan rounded-lg border border-cyan-500/20">
+                        <i class="fa-solid fa-sitemap text-xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-100">Serverless Analytics Pipeline Architecture</h2>
+                        <p class="text-xs text-slate-400">High-throughput real-time telemetry processing diagram</p>
+                    </div>
+                </div>
+                <button onclick="toggleModal('architecture-modal')" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Flowchart Nodes Diagram -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-center text-xs relative">
+                
+                <!-- Node 1 -->
+                <div class="bg-slate-900 border border-cardBorder p-4 rounded-xl flex flex-col items-center justify-center space-y-2 hover:border-accentBlue transition-all">
+                    <i class="fa-solid fa-desktop text-2xl text-accentBlue"></i>
+                    <div class="font-bold text-slate-200">1. Data Ingestion</div>
+                    <p class="text-[10px] text-slate-400">CloudWatch / Agent Telemetry Collectors</p>
+                </div>
+
+                <!-- Arrow -->
+                <div class="hidden md:flex items-center justify-center text-slate-600">
+                    <i class="fa-solid fa-arrow-right text-lg"></i>
+                </div>
+
+                <!-- Node 2 -->
+                <div class="bg-slate-900 border border-cardBorder p-4 rounded-xl flex flex-col items-center justify-center space-y-2 hover:border-accentPurple transition-all">
+                    <i class="fa-solid fa-diagram-project text-2xl text-accentPurple"></i>
+                    <div class="font-bold text-slate-200">2. Event Streaming</div>
+                    <p class="text-[10px] text-slate-400">AWS Kinesis / EventBridge Bus</p>
+                </div>
+
+                <!-- Arrow -->
+                <div class="hidden md:flex items-center justify-center text-slate-600">
+                    <i class="fa-solid fa-arrow-right text-lg"></i>
+                </div>
+
+                <!-- Node 3 -->
+                <div class="bg-slate-900 border border-cardBorder p-4 rounded-xl flex flex-col items-center justify-center space-y-2 hover:border-accentAmber transition-all">
+                    <i class="fa-solid fa-bolt text-2xl text-accentAmber"></i>
+                    <div class="font-bold text-slate-200">3. Compute Engine</div>
+                    <p class="text-[10px] text-slate-400">Serverless Lambda Transformations</p>
+                </div>
+
+            </div>
+
+            <!-- Secondary Flow Layer -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div class="bg-slate-900/60 border border-cardBorder p-4 rounded-xl space-y-2">
+                    <div class="flex items-center gap-2 text-accentEmerald font-semibold text-xs">
+                        <i class="fa-solid fa-database"></i>
+                        <span>4. Time-Series Storage</span>
+                    </div>
+                    <p class="text-xs text-slate-300">DynamoDB & Timestream store raw metric data with fast retention indexing for time-series aggregation.</p>
+                </div>
+
+                <div class="bg-slate-900/60 border border-cardBorder p-4 rounded-xl space-y-2">
+                    <div class="flex items-center gap-2 text-accentCyan font-semibold text-xs">
+                        <i class="fa-solid fa-wifi"></i>
+                        <span>5. Real-Time PubSub & WebSockets</span>
+                    </div>
+                    <p class="text-xs text-slate-300">API Gateway WebSockets stream instant updates directly to client dashboard graphs under 50ms.</p>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="toggleModal('architecture-modal')" class="px-4 py-2 bg-accentBlue hover:bg-blue-600 text-white font-medium text-xs rounded-lg transition-all">
+                    Got it, close architecture
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Audit Report Modal -->
+    <div id="report-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-cardBg border border-cardBorder rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-clipboard-check text-accentEmerald"></i>
+                    System Health Audit Summary
+                </h3>
+                <button onclick="toggleModal('report-modal')" class="p-1 text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="report-content" class="text-xs space-y-3 text-slate-300 font-mono bg-slate-950 p-4 rounded-xl border border-slate-900 max-h-96 overflow-y-auto">
+                <!-- Dynamically generated audit report text -->
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="copyAuditReport()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium rounded-lg border border-slate-700">
+                    <i class="fa-solid fa-copy mr-1"></i> Copy Report
+                </button>
+                <button onclick="toggleModal('report-modal')" class="px-3 py-1.5 bg-accentBlue hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        /* ==========================================================================
+           STATE & CONFIGURATION MANAGEMENT
+           ========================================================================== */
+        const state = {
+            isPaused: false,
+            samplingIntervalMs: 500,
+            maxDataPoints: 60,
+            currentProvider: 'aws',
+            currentRegion: 'us-east-1',
+            activeFilter: 'all',
+            searchQuery: '',
+            
+            // Metrics Buffers
+            labels: [],
+            data: {
+                latencyP50: [],
+                latencyP95: [],
+                latencyP99: [],
+                cpuUtil: [],
+                memoryUtil: [],
+                netIn: [],
+                netOut: [],
+                invocations: [],
+                errors: [],
+                coldStarts: []
+            },
+
+            // Fleet Microservices State
+            functions: [
+                { id: 'fn-auth-service', name: 'auth-jwt-verifier', region: 'us-east-1', status: 'Healthy', latency: 28, memory: 128, invokes: 840, errors: 0 },
+                { id: 'fn-payment-proc', name: 'stripe-webhook-handler', region: 'us-east-1', status: 'Healthy', latency: 45, memory: 512, invokes: 310, errors: 0 },
+                { id: 'fn-image-resize', name: 's3-thumbnail-generator', region: 'us-east-1', status: 'Cold Start', latency: 340, memory: 1024, invokes: 85, errors: 1 },
+                { id: 'fn-user-db-sync', name: 'dynamodb-stream-worker', region: 'us-west-2', status: 'Healthy', latency: 32, memory: 256, invokes: 1120, errors: 0 },
+                { id: 'fn-pdf-export', name: 'pdf-report-compiler', region: 'eu-west-1', status: 'Degraded', latency: 410, memory: 2048, invokes: 42, errors: 3 },
+                { id: 'fn-notification', name: 'sns-push-notifier', region: 'ap-southeast-1', status: 'Healthy', latency: 19, memory: 128, invokes: 560, errors: 0 }
+            ]
+        };
+
+        let intervalId = null;
+        let chartLatency, chartCpuMemory, chartNetwork, chartInvocations;
+
+        /* ==========================================================================
+           INITIALIZATION ON PAGE LOAD
+           ========================================================================== */
+        window.onload = function() {
+            initCharts();
+            seedInitialData();
+            renderFunctionGrid();
+            startTelemetryLoop();
+            
+            // Initial log entries
+            addLog('INFO', 'System initialized. Connected to real-time WebSocket telemetry stream.');
+            addLog('INFO', 'Serverless execution cluster active [us-east-1]. Auto-scaling enabled.');
+        };
+
+        /* ==========================================================================
+           CHART.JS CONFIGURATION & SETUP
+           ========================================================================== */
+        function initCharts() {
+            const chartOptionsBase = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 200 },
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { size: 10, family: 'Inter' } } },
+                    tooltip: { backgroundColor: '#0f172a', borderColor: '#1e293b', borderWidth: 1 }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(30, 41, 59, 0.4)' },
+                        ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8 }
+                    },
+                    y: {
+                        grid: { color: 'rgba(30, 41, 59, 0.4)' },
+                        ticks: { color: '#64748b', font: { size: 9 } }
+                    }
+                }
+            };
+
+            // Chart 1: Latencies
+            const ctxLatency = document.getElementById('chart-latency').getContext('2d');
+            chartLatency = new Chart(ctxLatency, {
+                type: 'line',
+                data: {
+                    labels: state.labels,
+                    datasets: [
+                        { label: 'p50', data: state.data.latencyP50, borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+                        { label: 'p95', data: state.data.latencyP95, borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+                        { label: 'p99', data: state.data.latencyP99, borderColor: '#f43f5e', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }
+                    ]
+                },
+                options: chartOptionsBase
+            });
+
+            // Chart 2: CPU & Memory Utilization
+            const ctxCpuMemory = document.getElementById('chart-cpu-memory').getContext('2d');
+            chartCpuMemory = new Chart(ctxCpuMemory, {
+                type: 'line',
+                data: {
+                    labels: state.labels,
+                    datasets: [
+                        { label: 'CPU %', data: state.data.cpuUtil, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+                        { label: 'Memory %', data: state.data.memoryUtil, borderColor: '#06b6d4', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }
+                    ]
+                },
+                options: {
+                    ...chartOptionsBase,
+                    scales: { ...chartOptionsBase.scales, y: { ...chartOptionsBase.scales.y, max: 100, min: 0 } }
+                }
+            });
+
+            // Chart 3: Network I/O
+            const ctxNetwork = document.getElementById('chart-network').getContext('2d');
+            chartNetwork = new Chart(ctxNetwork, {
+                type: 'line',
+                data: {
+                    labels: state.labels,
+                    datasets: [
+                        { label: 'Inbound (MB/s)', data: state.data.netIn, borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+                        { label: 'Outbound (MB/s)', data: state.data.netOut, borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0, tension: 0.3 }
+                    ]
+                },
+                options: chartOptionsBase
+            });
+
+            // Chart 4: Invocations & Cold Starts
+            const ctxInvocations = document.getElementById('chart-invocations').getContext('2d');
+            chartInvocations = new Chart(ctxInvocations, {
+                type: 'bar',
+                data: {
+                    labels: state.labels,
+                    datasets: [
+                        { label: 'Invocations', data: state.data.invocations, backgroundColor: 'rgba(59, 130, 246, 0.5)', yAxisID: 'y' },
+                        { label: 'Errors', data: state.data.errors, backgroundColor: 'rgba(244, 63, 94, 0.8)', yAxisID: 'y' },
+                        { label: 'Cold Starts', data: state.data.coldStarts, backgroundColor: 'rgba(6, 182, 212, 0.8)', yAxisID: 'y' }
+                    ]
+                },
+                options: { ...chartOptionsBase, scales: { ...chartOptionsBase.scales, x: { stacked: true }, y: { stacked: true } } }
+            });
+        }
+
+        /* ==========================================================================
+           DATA SEEDING & TELEMETRY GENERATOR
+           ========================================================================== */
+        function seedInitialData() {
+            const now = new Date();
+            for (let i = state.maxDataPoints - 1; i >= 0; i--) {
+                const t = new Date(now.getTime() - i * state.samplingIntervalMs);
+                const timeString = t.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+                
+                state.labels.push(timeString);
+                state.data.latencyP50.push(randomRange(15, 30));
+                state.data.latencyP95.push(randomRange(35, 60));
+                state.data.latencyP99.push(randomRange(70, 120));
+                state.data.cpuUtil.push(randomRange(20, 45));
+                state.data.memoryUtil.push(randomRange(40, 60));
+                state.data.netIn.push(randomRange(10, 25));
+                state.data.netOut.push(randomRange(30, 70));
+                state.data.invocations.push(randomRange(100, 250));
+                state.data.errors.push(Math.random() > 0.9 ? randomRange(1, 3) : 0);
+                state.data.coldStarts.push(Math.random() > 0.8 ? 1 : 0);
+            }
+            updateCharts();
+        }
+
+        function startTelemetryLoop() {
+            if (intervalId) clearInterval(intervalId);
+            intervalId = setInterval(tickTelemetry, state.samplingIntervalMs);
+        }
+
+        function tickTelemetry() {
+            if (state.isPaused) return;
+
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+
+            // Shift older points
+            if (state.labels.length >= state.maxDataPoints) {
+                state.labels.shift();
+                Object.keys(state.data).forEach(key => state.data[key].shift());
+            }
+
+            // Generate realistic telemetry fluctuations
+            const p50 = randomRange(18, 32);
+            const p95 = p50 + randomRange(15, 30);
+            const p99 = p95 + randomRange(30, 80);
+            const cpu = randomRange(25, 55);
+            const mem = randomRange(45, 65);
+            const netIn = randomRange(12, 30);
+            const netOut = randomRange(35, 80);
+            const invocations = randomRange(120, 300);
+            const errors = Math.random() > 0.92 ? randomRange(1, 4) : 0;
+            const coldStarts = Math.random() > 0.85 ? randomRange(1, 2) : 0;
+
+            // Push into buffers
+            state.labels.push(timeString);
+            state.data.latencyP50.push(p50);
+            state.data.latencyP95.push(p95);
+            state.data.latencyP99.push(p99);
+            state.data.cpuUtil.push(cpu);
+            state.data.memoryUtil.push(mem);
+            state.data.netIn.push(netIn);
+            state.data.netOut.push(netOut);
+            state.data.invocations.push(invocations);
+            state.data.errors.push(errors);
+            state.data.coldStarts.push(coldStarts);
+
+            updateCharts();
+            updateKPIs(p95, errors, invocations, coldStarts, cpu);
+            checkAlertRules(cpu, p99, errors);
+            
+            // Random contextual telemetry log emission
+            if (Math.random() > 0.7) {
+                const logLevels = ['INFO', 'INFO', 'INFO', 'WARN'];
+                const lvl = logLevels[Math.floor(Math.random() * logLevels.length)];
+                if (lvl === 'WARN') {
+                    addLog('WARN', `Microservice pod [fn-auth-${randomRange(100,999)}] execution delayed by ${randomRange(100, 250)}ms.`);
+                } else {
+                    addLog('INFO', `Processed batch of ${invocations} executions across ${state.currentRegion}.`);
+                }
+            }
+        }
+
+        /* ==========================================================================
+           UI & KPI UPDATES
+           ========================================================================== */
+        function updateCharts() {
+            chartLatency.update();
+            chartCpuMemory.update();
+            chartNetwork.update();
+            chartInvocations.update();
+        }
+
+        function updateKPIs(p95, errors, invocations, coldStarts, cpu) {
+            document.getElementById('kpi-latency').innerText = `${p95} ms`;
+            document.getElementById('kpi-invocations').innerText = (invocations * 8).toLocaleString();
+            document.getElementById('kpi-coldstarts').innerText = coldStarts;
+            
+            const totalInvocations = state.data.invocations.reduce((a, b) => a + b, 0);
+            const totalErrors = state.data.errors.reduce((a, b) => a + b, 0);
+            const errorPct = totalInvocations > 0 ? ((totalErrors / totalInvocations) * 100).toFixed(2) : 0.00;
+            
+            const errElem = document.getElementById('kpi-errors');
+            errElem.innerText = `${errorPct}%`;
+            errElem.className = errorPct > 1.0 ? 'text-2xl font-bold tracking-tight text-rose-400' : 'text-2xl font-bold tracking-tight text-emerald-400';
+
+            // Cost calculation simulation
+            const monthlyCostEst = (totalInvocations * 0.000021 + cpu * 0.15).toFixed(2);
+            document.getElementById('kpi-cost').innerText = `$${monthlyCostEst}`;
+        }
+
+        /* ==========================================================================
+           MICROSERVICES FLEET HEALTH GRID
+           ========================================================================== */
+        function renderFunctionGrid() {
+            const grid = document.getElementById('function-grid');
+            grid.innerHTML = '';
+
+            const filtered = state.functions.filter(fn => {
+                const matchesFilter = state.activeFilter === 'all' ||
+                    (state.activeFilter === 'healthy' && fn.status === 'Healthy') ||
+                    (state.activeFilter === 'cold' && fn.status === 'Cold Start') ||
+                    (state.activeFilter === 'degraded' && fn.status === 'Degraded');
+                
+                const matchesSearch = fn.name.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
+                    fn.region.toLowerCase().includes(state.searchQuery.toLowerCase());
+
+                return matchesFilter && matchesSearch;
+            });
+
+            filtered.forEach(fn => {
+                let statusBadge = '';
+                if (fn.status === 'Healthy') {
+                    statusBadge = `<span class="px-2 py-0.5 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-medium">Healthy</span>`;
+                } else if (fn.status === 'Cold Start') {
+                    statusBadge = `<span class="px-2 py-0.5 text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-full font-medium animate-pulse">Cold Start</span>`;
+                } else {
+                    statusBadge = `<span class="px-2 py-0.5 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full font-medium">Degraded</span>`;
+                }
+
+                const card = document.createElement('div');
+                card.className = "bg-slate-900/80 border border-cardBorder rounded-xl p-3.5 space-y-3 hover:border-slate-700 transition-all";
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="font-mono text-xs font-semibold text-slate-200 truncate max-w-[180px]">${fn.name}</div>
+                        ${statusBadge}
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-[11px] text-slate-400">
+                        <div>
+                            <div class="text-[9px] uppercase tracking-wider text-slate-500">Region</div>
+                            <div class="font-medium text-slate-300">${fn.region}</div>
+                        </div>
+                        <div>
+                            <div class="text-[9px] uppercase tracking-wider text-slate-500">Avg Latency</div>
+                            <div class="font-medium text-slate-300">${fn.latency}ms</div>
+                        </div>
+                        <div>
+                            <div class="text-[9px] uppercase tracking-wider text-slate-500">Memory</div>
+                            <div class="font-medium text-slate-300">${fn.memory}MB</div>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterFunctions(type) {
+            state.activeFilter = type;
+            ['all', 'healthy', 'cold', 'degraded'].forEach(t => {
+                const btn = document.getElementById(`filter-fn-${t}`);
+                if (t === type) {
+                    btn.className = "px-2.5 py-1 rounded-md bg-slate-800 text-white font-medium";
+                } else {
+                    btn.className = "px-2.5 py-1 rounded-md text-slate-400 hover:text-white";
+                }
+            });
+            renderFunctionGrid();
+        }
+
+        function searchFunctions() {
+            state.searchQuery = document.getElementById('function-search').value;
+            renderFunctionGrid();
+        }
+
+        /* ==========================================================================
+           REAL-TIME EVENT LOG STREAM TERMINAL
+           ========================================================================== */
+        function addLog(level, message) {
+            const consoleElem = document.getElementById('log-console');
+            const now = new Date().toISOString().substring(11, 23);
+
+            let colorClass = 'text-slate-300';
+            if (level === 'WARN') colorClass = 'text-amber-400';
+            if (level === 'ERROR') colorClass = 'text-rose-400 font-bold';
+            if (level === 'DEBUG') colorClass = 'text-cyan-400';
+
+            const logLine = document.createElement('div');
+            logLine.className = `log-item ${level} flex items-start gap-2`;
+            logLine.innerHTML = `
+                <span class="text-slate-600 select-none">[${now}]</span>
+                <span class="font-bold select-none text-[10px] px-1 rounded ${level === 'ERROR' ? 'bg-rose-950 text-rose-300' : level === 'WARN' ? 'bg-amber-950 text-amber-300' : 'bg-slate-900 text-slate-400'}">${level}</span>
+                <span class="${colorClass} flex-1 break-all">${message}</span>
+            `;
+
+            consoleElem.appendChild(logLine);
+            consoleElem.scrollTop = consoleElem.scrollHeight;
+
+            // Cap logs to prevent DOM overload
+            if (consoleElem.children.length > 100) {
+                consoleElem.removeChild(consoleElem.firstChild);
+            }
+        }
+
+        function filterLogs() {
+            const filterVal = document.getElementById('log-filter').value;
+            const items = document.querySelectorAll('.log-item');
+            items.forEach(item => {
+                if (filterVal === 'ALL' || item.classList.contains(filterVal)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function clearLogConsole() {
+            document.getElementById('log-console').innerHTML = '';
+            addLog('INFO', 'Log console cleared.');
+        }
+
+        /* ==========================================================================
+           SIMULATORS & TRIGGER HANDLERS
+           ========================================================================== */
+        function triggerTrafficSurge() {
+            addLog('WARN', 'SIMULATION TRIGGER: Traffic Surge initialized (+300% load spike).');
+            for (let i = 0; i < 5; i++) {
+                const lastIdx = state.data.invocations.length - 1;
+                state.data.invocations[lastIdx] += randomRange(400, 800);
+                state.data.latencyP99[lastIdx] += randomRange(120, 250);
+                state.data.cpuUtil[lastIdx] = Math.min(98, state.data.cpuUtil[lastIdx] + randomRange(25, 40));
+            }
+            updateCharts();
+        }
+
+        function triggerColdStart() {
+            addLog('WARN', 'SIMULATION TRIGGER: Initiated new serverless container initialization (Cold Start).');
+            const lastIdx = state.data.coldStarts.length - 1;
+            state.data.coldStarts[lastIdx] += 4;
+            state.data.latencyP99[lastIdx] += 320;
+            
+            // Temporarily mark a function as Cold Start in grid
+            state.functions[0].status = 'Cold Start';
+            state.functions[0].latency = 380;
+            renderFunctionGrid();
+
+            setTimeout(() => {
+                state.functions[0].status = 'Healthy';
+                state.functions[0].latency = 28;
+                renderFunctionGrid();
+            }, 4000);
+
+            updateCharts();
+        }
+
+        function injectErrorSpike() {
+            addLog('ERROR', 'SIMULATION TRIGGER: Fault injection activated! Unhandled HTTP 500 exceptions spiking.');
+            const lastIdx = state.data.errors.length - 1;
+            state.data.errors[lastIdx] += randomRange(15, 30);
+            updateCharts();
+        }
+
+        function resetMetrics() {
+            state.labels = [];
+            Object.keys(state.data).forEach(key => state.data[key] = []);
+            seedInitialData();
+            addLog('INFO', 'Telemetry metrics cache reset successfully.');
+        }
+
+        function togglePauseStream() {
+            state.isPaused = !state.isPaused;
+            const btnText = document.getElementById('pause-text');
+            const btnIcon = document.getElementById('pause-icon');
+            
+            if (state.isPaused) {
+                btnText.innerText = 'Resume Stream';
+                btnIcon.className = 'fa-solid fa-play';
+                addLog('WARN', 'Telemetry stream paused by user.');
+            } else {
+                btnText.innerText = 'Pause Stream';
+                btnIcon.className = 'fa-solid fa-pause';
+                addLog('INFO', 'Telemetry stream resumed.');
+            }
+        }
+
+        function changeSamplingRate() {
+            const val = parseInt(document.getElementById('sample-rate').value);
+            state.samplingIntervalMs = val;
+            startTelemetryLoop();
+            addLog('INFO', `Sampling frequency updated to ${val}ms.`);
+        }
+
+        function changeTimeWindow() {
+            const seconds = parseInt(document.getElementById('time-range').value);
+            state.maxDataPoints = Math.floor((seconds * 1000) / state.samplingIntervalMs);
+            addLog('INFO', `Time window display adjusted to last ${seconds} seconds.`);
+        }
+
+        function setProvider(provider) {
+            state.currentProvider = provider;
+            ['aws', 'gcp', 'azure'].forEach(p => {
+                const btn = document.getElementById(`btn-${p}`);
+                if (p === provider) {
+                    btn.className = "px-2.5 py-1 rounded-md font-medium transition-all bg-accentBlue text-white shadow";
+                } else {
+                    btn.className = "px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all";
+                }
+            });
+            addLog('INFO', `Switched Cloud Telemetry Provider context to: ${provider.toUpperCase()}`);
+        }
+
+        function updateRegion() {
+            state.currentRegion = document.getElementById('region-select').value;
+            addLog('INFO', `Active telemetry cluster region set to: ${state.currentRegion}`);
+        }
+
+        /* ==========================================================================
+           ALERT RULES ENGINE
+           ========================================================================== */
+        function checkAlertRules(cpu, p99, errors) {
+            const checkCpu = document.getElementById('rule-cpu').checked;
+            const checkLatency = document.getElementById('rule-latency').checked;
+            const checkError = document.getElementById('rule-error').checked;
+
+            if (checkCpu && cpu > 85) {
+                addLog('ERROR', `CRITICAL ALERT: CPU utilization exceeded threshold! Current: ${cpu}% (Limit: 85%)`);
+            }
+            if (checkLatency && p99 > 350) {
+                addLog('WARN', `PERFORMANCE ALERT: High p99 Latency detected! Current: ${p99}ms (Limit: 350ms)`);
+            }
+            if (checkError && errors > 5) {
+                addLog('ERROR', `ALERT: High Error Burst detected! ${errors} failed invocations in last sample.`);
+            }
+        }
+
+        /* ==========================================================================
+           REPORT GENERATOR & EXPORT TOOLS
+           ========================================================================== */
+        function generateDiagnosticSummary() {
+            const totalInvocations = state.data.invocations.reduce((a, b) => a + b, 0);
+            const totalErrors = state.data.errors.reduce((a, b) => a + b, 0);
+            const avgCpu = (state.data.cpuUtil.reduce((a, b) => a + b, 0) / state.data.cpuUtil.length).toFixed(1);
+            const avgP95 = (state.data.latencyP95.reduce((a, b) => a + b, 0) / state.data.latencyP95.length).toFixed(1);
+
+            const reportHtml = `
+                ----------------------------------------------------
+                SERVERLESS TELEMETRY AUDIT REPORT
+                Generated: ${new Date().toLocaleString()}
+                Provider: ${state.currentProvider.toUpperCase()} | Region: ${state.currentRegion}
+                ----------------------------------------------------
+
+                [1] EXECUTIVE COMPUTATION SUMMARY
+                • Total Sampled Invocations: ${totalInvocations.toLocaleString()}
+                • Total Execution Failures: ${totalErrors}
+                • Average Cluster CPU Usage: ${avgCpu}%
+                • Average p95 Execution Latency: ${avgP95} ms
+
+                [2] FLEET MICROSERVICES DIAGNOSTICS
+                • Active Monitored Functions: ${state.functions.length}
+                • Fleet Status: ${totalErrors > 10 ? 'ATTENTION REQUIRED' : 'OPTIMAL / HEALTHY'}
+
+                [3] SYSTEM RECOMMENDATIONS
+                ${avgCpu > 70 ? '⚠️ High CPU load detected. Consider upgrading memory allocation for Lambda instances.' : '✓ CPU allocation is well balanced.'}
+                ${avgP95 > 200 ? '⚠️ Latency bottleneck observed. Consider provisioned concurrency to eliminate cold starts.' : '✓ Execution latencies remain within optimal SLA boundaries.'}
+            `;
+
+            document.getElementById('report-content').innerText = reportHtml;
+            toggleModal('report-modal');
+        }
+
+        function exportMetrics(format) {
+            let content = '';
+            let mimeType = '';
+            let filename = `serverless_metrics_${Date.now()}.${format}`;
+
+            if (format === 'json') {
+                content = JSON.stringify(state, null, 2);
+                mimeType = 'application/json';
+            } else if (format === 'csv') {
+                const headers = ['Timestamp', 'Latency_p50', 'Latency_p95', 'Latency_p99', 'CPU_Util', 'Memory_Util', 'Invocations', 'Errors'];
+                const rows = state.labels.map((label, idx) => [
+                    label,
+                    state.data.latencyP50[idx],
+                    state.data.latencyP95[idx],
+                    state.data.latencyP99[idx],
+                    state.data.cpuUtil[idx],
+                    state.data.memoryUtil[idx],
+                    state.data.invocations[idx],
+                    state.data.errors[idx]
+                ]);
+                content = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+                mimeType = 'text/csv';
+            }
+
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            addLog('INFO', `Exported telemetry dataset as ${format.toUpperCase()}`);
+        }
+
+        function copyAuditReport() {
+            const text = document.getElementById('report-content').innerText;
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('Audit report copied to clipboard!');
+        }
+
+        /* ==========================================================================
+           UTILITY FUNCTIONS
+           ========================================================================== */
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.toggle('hidden');
+        }
+
+        function randomRange(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+    </script>
+</body>
+</html>
